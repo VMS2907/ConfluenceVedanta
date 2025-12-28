@@ -1,42 +1,55 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Loader2, CheckCircle, AlertTriangle, XCircle, ExternalLink, Clock } from 'lucide-react'
+import { Search, Loader2, CheckCircle, AlertTriangle, XCircle, ExternalLink, Clock, AlertCircleIcon } from 'lucide-react'
 import CredibilityGauge from './CredibilityGauge'
 import { verifyClaim } from '../services/newsApi'
+import { analyzeCredibilityWithAI } from '../services/aiService'
 
 const demoData = {
     claim: "Breaking: Massive flood in Kerala, 500 casualties reported, government cover-up alleged",
     overallScore: 45,
+    overallStatus: "DISPUTED",
+    reasoning: "Flood event is verified by multiple credible sources, but casualty numbers are significantly disputed and conspiracy claims lack any supporting evidence.",
     claims: [
         {
             id: 1,
-            text: "Flood in Kerala",
+            text: "Massive floods in Kerala",
             status: "verified",
             score: 95,
-            sources: ["NDTV", "Times of India", "PTI"]
+            sources: ["NDTV", "Times of India", "PTI", "PIB India"],
+            evidence: "Heavy rainfall and flooding in multiple Kerala districts confirmed by NDTV, Times of India, PIB India. NDRF teams deployed for rescue operations."
         },
         {
             id: 2,
             text: "500 casualties reported",
             status: "disputed",
             score: 30,
-            sources: ["Official count: 23 (PIB India)"]
+            sources: ["Unverified social media"],
+            evidence: "Official government count states 23 casualties. The figure of 500 appears to be unverified social media speculation without official confirmation."
         },
         {
             id: 3,
             text: "Government cover-up alleged",
             status: "false",
             score: 10,
-            sources: ["No credible sources found"]
+            sources: ["No credible sources"],
+            evidence: "No credible sources support allegations of cover-up. This appears to be conspiracy speculation without factual basis. All official channels are reporting transparent casualty figures."
         }
     ],
     sources: [
-        { name: "PTI", score: 92, type: "News Agency" },
-        { name: "Times of India", score: 87, type: "Newspaper" },
-        { name: "NDTV", score: 85, type: "TV News" },
-        { name: "Random Blog", score: 25, type: "Blog" },
-        { name: "Social Media", score: 15, type: "User Generated" }
+        { name: "PTI", score: 92, type: "News Agency", credibilityScore: 92, reputation: "National wire service with 70+ years of journalistic excellence", coverage: "Reports flooding in multiple districts with official casualty count" },
+        { name: "Times of India", score: 87, type: "Newspaper", credibilityScore: 87, reputation: "India's largest English-language daily newspaper", coverage: "Comprehensive flood coverage with on-ground reporting" },
+        { name: "NDTV", score: 85, type: "TV News", credibilityScore: 85, reputation: "Established national TV news network", coverage: "Live updates from affected areas with official statements" },
+        { name: "PIB India", score: 92, type: "Government", credibilityScore: 92, reputation: "Official Press Information Bureau", coverage: "Official casualty count: 23 deaths as of latest update" },
+        { name: "Social Media", score: 15, type: "User Generated", credibilityScore: 15, reputation: "Unverified user-generated content", coverage: "Unverified claims circulating without official confirmation" }
     ],
+    redFlags: [
+        "Extreme casualty number discrepancy: 500 vs official count of 23",
+        "Conspiracy language detected: 'cover-up', 'hiding'",
+        "Sensational language: 'BREAKING', urgency manipulation",
+        "Multiple exclamation marks indicating emotional manipulation"
+    ],
+    contextualInfo: "Historical pattern: Similar inflated casualty claims circulated during 2018 Kerala floods and were later debunked. Misinformation typically amplifies during crisis events. Official death toll stands at 23 as per government sources, with rescue operations ongoing.",
     timeline: "First reported: 2 hours ago"
 }
 
@@ -108,13 +121,14 @@ export default function VerificationDemo() {
         setIsAnalyzing(true)
         setResults(null)
 
-        // Simulate analysis steps
+        // Enhanced analysis steps
         const steps = [
             'Extracting claims...',
             'Searching trusted sources...',
             'Cross-referencing databases...',
-            'Analyzing credibility patterns...',
-            'Generating report...'
+            'AI-powered credibility analysis...',
+            'Detecting red flags...',
+            'Generating comprehensive report...'
         ]
 
         let stepIndex = 0
@@ -123,32 +137,51 @@ export default function VerificationDemo() {
                 setAnalysisStep(steps[stepIndex])
                 stepIndex++
             }
-        }, 500)
+        }, 600)
 
         try {
-            // Fetch real verification data
+            // Step 1: Fetch news articles using NewsAPI
             const verificationResult = await verifyClaim(claimToAnalyze)
 
-            clearInterval(stepInterval)
-            setIsAnalyzing(false)
+            if (verificationResult.success && verificationResult.articles.length > 0) {
+                // Step 2: AI-powered credibility analysis
+                setAnalysisStep('Running AI analysis...')
+                const aiAnalysis = await analyzeCredibilityWithAI(
+                    claimToAnalyze,
+                    verificationResult.articles
+                )
 
-            if (verificationResult.success) {
-                // Transform API data to match component structure
+                clearInterval(stepInterval)
+                setIsAnalyzing(false)
+
+                // Step 3: Transform AI analysis to UI format
                 const transformedData = {
                     claim: verificationResult.claim,
-                    overallScore: verificationResult.credibilityScore,
-                    claims: generateClaimsFromArticles(verificationResult.articles, verificationResult.credibilityScore),
-                    sources: verificationResult.sources,
+                    overallScore: aiAnalysis.overallCredibility,
+                    overallStatus: aiAnalysis.overallStatus,
+                    reasoning: aiAnalysis.reasoning,
+                    claims: aiAnalysis.claims.map((claim, index) => ({
+                        id: index + 1,
+                        text: claim.claimText,
+                        status: claim.status.toLowerCase(),
+                        score: claim.credibility,
+                        sources: claim.sources,
+                        evidence: claim.evidence
+                    })),
+                    sources: aiAnalysis.sourceAnalysis || verificationResult.sources,
+                    redFlags: aiAnalysis.redFlags || [],
+                    contextualInfo: aiAnalysis.contextualInfo || '',
                     timeline: `Analyzed: ${new Date(verificationResult.timestamp).toLocaleTimeString()}`
                 }
                 setResults(transformedData)
             } else {
-                // Fallback to demo data if API fails
+                // No articles found - use fallback
                 clearInterval(stepInterval)
                 setIsAnalyzing(false)
                 setResults(demoData)
             }
         } catch (error) {
+            console.error('Analysis error:', error)
             // Fallback to demo data on error
             clearInterval(stepInterval)
             setIsAnalyzing(false)
@@ -331,7 +364,12 @@ export default function VerificationDemo() {
                                     transition={{ delay: 0.2 }}
                                     className="glass-card p-6 lg:col-span-2"
                                 >
-                                    <h3 className="text-lg font-semibold text-white mb-4">Extracted Claims</h3>
+                                    <h3 className="text-lg font-semibold text-white mb-4">AI Analysis - Extracted Claims</h3>
+                                    {results.reasoning && (
+                                        <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                                            <p className="text-sm text-blue-300">{results.reasoning}</p>
+                                        </div>
+                                    )}
                                     <div className="space-y-4">
                                         {results.claims.map((claim, i) => (
                                             <motion.div
@@ -344,6 +382,9 @@ export default function VerificationDemo() {
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div className="flex-1">
                                                         <p className="text-white font-medium mb-2">"{claim.text}"</p>
+                                                        {claim.evidence && (
+                                                            <p className="text-[#94A3B8] text-sm mb-2">{claim.evidence}</p>
+                                                        )}
                                                         <p className="text-[#64748B] text-sm">
                                                             {claim.sources.join(' • ')}
                                                         </p>
@@ -379,38 +420,45 @@ export default function VerificationDemo() {
                                     </div>
                                 </motion.div>
 
-                                {/* What Sources Say */}
-                                <motion.div
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: 0.7 }}
-                                    className="glass-card p-6"
-                                >
-                                    <h3 className="text-lg font-semibold text-white mb-4">What Sources Say</h3>
-                                    <div className="space-y-3">
-                                        <div className="p-3 rounded-lg bg-[#10B981]/10 border border-[#10B981]/20">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <CheckCircle className="w-4 h-4 text-[#10B981]" />
-                                                <span className="text-sm font-medium text-[#10B981]">Official Sources</span>
-                                            </div>
-                                            <p className="text-xs text-[#94A3B8]">
-                                                PIB confirms 23 casualties, relief operations underway
-                                            </p>
+                                {/* Red Flags */}
+                                {results.redFlags && results.redFlags.length > 0 && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: 0.7 }}
+                                        className="glass-card p-6"
+                                    >
+                                        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                            <AlertTriangle className="w-5 h-5 text-[#EF4444]" />
+                                            Red Flags Detected
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {results.redFlags.map((flag, index) => (
+                                                <div
+                                                    key={index}
+                                                    className="p-3 rounded-lg bg-[#EF4444]/10 border border-[#EF4444]/20"
+                                                >
+                                                    <p className="text-sm text-[#FCA5A5]">{flag}</p>
+                                                </div>
+                                            ))}
                                         </div>
-                                        <div className="p-3 rounded-lg bg-[#F59E0B]/10 border border-[#F59E0B]/20">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <AlertTriangle className="w-4 h-4 text-[#F59E0B]" />
-                                                <span className="text-sm font-medium text-[#F59E0B]">Unverified Claims</span>
-                                            </div>
-                                            <p className="text-xs text-[#94A3B8]">
-                                                Casualty numbers vary across social media posts
-                                            </p>
+                                    </motion.div>
+                                )}
+
+                                {/* Contextual Information */}
+                                {results.contextualInfo && (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        transition={{ delay: 0.8 }}
+                                        className="glass-card p-6 lg:col-span-2"
+                                    >
+                                        <h3 className="text-lg font-semibold text-white mb-4">Contextual Information</h3>
+                                        <div className="p-4 rounded-lg bg-[#0EA5E9]/10 border border-[#0EA5E9]/20">
+                                            <p className="text-sm text-[#94A3B8] leading-relaxed">{results.contextualInfo}</p>
                                         </div>
-                                        <a href="#" className="flex items-center gap-1 text-xs text-[#0EA5E9] hover:underline mt-2">
-                                            View full report <ExternalLink className="w-3 h-3" />
-                                        </a>
-                                    </div>
-                                </motion.div>
+                                    </motion.div>
+                                )}
                             </div>
                         </motion.div>
                     )}

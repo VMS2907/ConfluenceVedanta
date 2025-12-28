@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, Bot, User, Sparkles } from 'lucide-react'
 import { searchNews, fetchIndiaHeadlines, getTrendingTopics } from '../services/newsApi'
+import { askReporterAI } from '../services/aiService'
 
 const samplePrompts = [
     "What happened in Kerala today?",
@@ -157,38 +158,51 @@ export default function ReportersNotebook() {
                 return
             }
 
-            // Fetch real news data
-            const newsResult = await searchNews(text, { pageSize: 5 })
+            // Step 1: Fetch news articles for context
+            const newsResult = await searchNews(text, { pageSize: 10 })
+
+            // Step 2: Use AI to generate intelligent response
+            const aiResponse = await askReporterAI(text, {
+                sources: newsResult.success ? newsResult.articles : [],
+                totalResults: newsResult.totalResults || 0
+            })
 
             let responseContent = ''
 
-            if (newsResult.success && newsResult.articles.length > 0) {
-                const articles = newsResult.articles
+            // Format AI response with sources and suggestions
+            responseContent = aiResponse.answer + '\n\n'
 
-                responseContent = `**Search Results for "${text}"**\n\n`
-                responseContent += `Found **${newsResult.totalResults}** related articles\n\n`
-                responseContent += `**Top Verified Sources:**\n\n`
-
-                articles.forEach((article, index) => {
-                    responseContent += `${index + 1}. **${article.title}**\n`
-                    responseContent += `   📰 Source: ${article.source.name}\n`
-                    responseContent += `   🕒 Published: ${new Date(article.publishedAt).toLocaleString()}\n`
-                    if (article.description) {
-                        responseContent += `   📄 ${article.description.substring(0, 150)}...\n`
-                    }
-                    responseContent += `\n`
+            // Add key sources if available
+            if (aiResponse.keySources && aiResponse.keySources.length > 0) {
+                responseContent += '**Key Sources:**\n'
+                aiResponse.keySources.forEach(source => {
+                    responseContent += `• ${source}\n`
                 })
+                responseContent += '\n'
+            }
 
-                responseContent += `\n**Analysis:**\n`
-                responseContent += `• Coverage across ${new Set(articles.map(a => a.source.name)).size} different sources\n`
-                responseContent += `• Most recent update: ${new Date(articles[0].publishedAt).toLocaleTimeString()}\n`
-            } else {
-                responseContent = `**No recent articles found** for "${text}"\n\n`
-                responseContent += `This could mean:\n`
-                responseContent += `• The topic is very recent or breaking\n`
-                responseContent += `• The keywords need refinement\n`
-                responseContent += `• Limited coverage on this specific query\n\n`
-                responseContent += `Try broader search terms or check our trending topics!`
+            // Add verification status
+            if (aiResponse.verificationStatus && aiResponse.verificationStatus !== 'UNAVAILABLE') {
+                const statusEmoji = {
+                    'VERIFIED': '✅',
+                    'PARTIAL': '⚠️',
+                    'UNVERIFIED': '❌',
+                    'ROUTINE': 'ℹ️'
+                }
+                responseContent += `**Verification Status:** ${statusEmoji[aiResponse.verificationStatus] || 'ℹ️'} ${aiResponse.verificationStatus}\n\n`
+            }
+
+            // Add urgency level indicator
+            if (aiResponse.urgencyLevel && aiResponse.urgencyLevel !== 'ROUTINE') {
+                responseContent += `**🚨 Urgency Level:** ${aiResponse.urgencyLevel}\n\n`
+            }
+
+            // Add suggested follow-up questions
+            if (aiResponse.suggestedQuestions && aiResponse.suggestedQuestions.length > 0) {
+                responseContent += '**Suggested Follow-ups:**\n'
+                aiResponse.suggestedQuestions.forEach((q, i) => {
+                    responseContent += `${i + 1}. ${q}\n`
+                })
             }
 
             setTimeout(() => {
@@ -202,11 +216,12 @@ export default function ReportersNotebook() {
             }, 800)
 
         } catch (error) {
+            console.error('Chat error:', error)
             setTimeout(() => {
                 setMessages(prev => [...prev, {
                     id: Date.now(),
                     type: 'ai',
-                    content: `I encountered an error while searching: "${text}"\n\nPlease try again or rephrase your query.`,
+                    content: `I encountered an error while processing your question: "${text}"\n\nPlease try again or rephrase your query. I'm here to help with news verification and research!`,
                     timestamp: 'Just now'
                 }])
                 setIsTyping(false)
