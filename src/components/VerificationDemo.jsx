@@ -175,17 +175,67 @@ export default function VerificationDemo() {
                 }
                 setResults(transformedData)
             } else {
-                // No articles found - use fallback
+                // No articles found - generate dynamic fallback
                 clearInterval(stepInterval)
                 setIsAnalyzing(false)
-                setResults(demoData)
+                const dynamicFallback = {
+                    claim: claimToAnalyze,
+                    overallScore: 25,
+                    overallStatus: "UNVERIFIED",
+                    reasoning: "Unable to find recent credible sources covering this claim. This could mean the claim is very recent, lacks mainstream coverage, or may be unsubstantiated.",
+                    claims: [{
+                        id: 1,
+                        text: claimToAnalyze,
+                        status: "disputed",
+                        score: 25,
+                        sources: ["No credible sources found"],
+                        evidence: "No articles from trusted news sources found to verify this claim. Limited mainstream media coverage detected."
+                    }],
+                    sources: [{
+                        name: "No Sources",
+                        score: 0,
+                        type: "N/A",
+                        credibilityScore: 0,
+                        reputation: "No credible sources found",
+                        coverage: "No coverage detected in major news outlets"
+                    }],
+                    redFlags: ["No credible source coverage found", "Claim may be unverified or emerging"],
+                    contextualInfo: "This claim could not be verified against current news sources. Please verify through official channels or wait for mainstream media coverage.",
+                    timeline: `Analyzed: ${new Date().toLocaleTimeString()}`
+                }
+                setResults(dynamicFallback)
             }
         } catch (error) {
             console.error('Analysis error:', error)
-            // Fallback to demo data on error
+            // Generate dynamic fallback on error
             clearInterval(stepInterval)
             setIsAnalyzing(false)
-            setResults(demoData)
+            const dynamicFallback = {
+                claim: claimToAnalyze,
+                overallScore: 30,
+                overallStatus: "ERROR",
+                reasoning: `Analysis encountered an error: ${error.message}. Unable to complete verification at this time.`,
+                claims: [{
+                    id: 1,
+                    text: claimToAnalyze,
+                    status: "disputed",
+                    score: 30,
+                    sources: ["Analysis incomplete"],
+                    evidence: "Verification could not be completed due to technical issues. Please try again."
+                }],
+                sources: [{
+                    name: "Error",
+                    score: 0,
+                    type: "System",
+                    credibilityScore: 0,
+                    reputation: "Analysis error",
+                    coverage: error.message
+                }],
+                redFlags: ["Analysis incomplete", "Technical error occurred"],
+                contextualInfo: "Verification failed. Please try again or verify through alternative means.",
+                timeline: `Error at: ${new Date().toLocaleTimeString()}`
+            }
+            setResults(dynamicFallback)
         }
     }
 

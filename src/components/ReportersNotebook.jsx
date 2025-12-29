@@ -5,10 +5,10 @@ import { searchNews, fetchIndiaHeadlines, getTrendingTopics } from '../services/
 import { askReporterAI } from '../services/aiService'
 
 const samplePrompts = [
-    "What happened in Kerala today?",
-    "Latest verified updates on floods",
-    "Check recent earthquake claims",
-    "Trending misinformation topics"
+    "What are today's top news stories?",
+    "Latest developments in India",
+    "Recent global breaking news",
+    "Trending topics right now"
 ]
 
 const initialMessages = [
@@ -172,6 +172,16 @@ export default function ReportersNotebook() {
             // Format AI response with sources and suggestions
             responseContent = aiResponse.answer + '\n\n'
 
+            // Add temporal context (CRITICAL FOR FRESHNESS)
+            if (aiResponse.temporalContext) {
+                responseContent += `🕒 **Data Freshness:** ${aiResponse.temporalContext}\n\n`
+            }
+
+            // Add temporal warning if sources are old
+            if (aiResponse.temporalWarning) {
+                responseContent += `${aiResponse.temporalWarning}\n\n`
+            }
+
             // Add key sources if available
             if (aiResponse.keySources && aiResponse.keySources.length > 0) {
                 responseContent += '**Key Sources:**\n'
@@ -185,8 +195,10 @@ export default function ReportersNotebook() {
             if (aiResponse.verificationStatus && aiResponse.verificationStatus !== 'UNAVAILABLE') {
                 const statusEmoji = {
                     'VERIFIED': '✅',
+                    'DEVELOPING': '🔄',
                     'PARTIAL': '⚠️',
                     'UNVERIFIED': '❌',
+                    'NO_CURRENT_REPORTS': 'ℹ️',
                     'ROUTINE': 'ℹ️'
                 }
                 responseContent += `**Verification Status:** ${statusEmoji[aiResponse.verificationStatus] || 'ℹ️'} ${aiResponse.verificationStatus}\n\n`
@@ -194,7 +206,13 @@ export default function ReportersNotebook() {
 
             // Add urgency level indicator
             if (aiResponse.urgencyLevel && aiResponse.urgencyLevel !== 'ROUTINE') {
-                responseContent += `**🚨 Urgency Level:** ${aiResponse.urgencyLevel}\n\n`
+                const urgencyEmoji = {
+                    'BREAKING': '🔴',
+                    'DEVELOPING': '🟡',
+                    'HIGH': '🔴',
+                    'MODERATE': '🟠'
+                }
+                responseContent += `**${urgencyEmoji[aiResponse.urgencyLevel] || '🚨'} Urgency Level:** ${aiResponse.urgencyLevel}\n\n`
             }
 
             // Add suggested follow-up questions

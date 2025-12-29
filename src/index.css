@@ -1035,3 +1035,17 @@ button:focus-visible,
     0 0 0 4px rgba(14, 165, 233, 0.1),
     0 0 40px rgba(14, 165, 233, 0.6);
 }
+/* Header Premium Utilities */
+.bg-size-200 {
+  background-size: 200% 200%;
+}
+
+.animate-gradient {
+  animation: gradientShift 4s ease infinite;
+}
+
+/* Scroll-based header effects */
+.header-scrolled {
+  backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
